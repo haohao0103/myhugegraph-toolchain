@@ -57,6 +57,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.DataFrameReader;
+import org.apache.spark.util.LongAccumulator;
 import org.slf4j.Logger;
 import java.io.Serializable;
 import java.util.*;
@@ -127,8 +128,7 @@ public class HugeGraphSparkLoader implements Serializable {
                 .getOrCreate();
 
         SparkContext sc = session.sparkContext();
-
-        Long totalInsertSuccess=0L;
+        LongAccumulator totalInsertSuccess = sc.longAccumulator("totalInsertSuccess");
         for (InputStruct struct : structs) {
             // 初始化metric
             LOG.info("\n init"+ struct.input().asFileSource().path()+" distribute metrics---- \n");
@@ -156,9 +156,9 @@ public class HugeGraphSparkLoader implements Serializable {
             collectLoadMetrics(loadDistributeMetrics,totalInsertSuccess);
             LOG.info("    \n   load data info : \t"+struct.input().asFileSource().path() +"\n load data finish!!!; \n" );
         }
-
+        Long totalInsertSuccessCnt = totalInsertSuccess.value();
         LOG.info("\n ---------导入数据整体任务结束----------------------\n" +
-                "\n  insertSuccess cnt:\t"+totalInsertSuccess+"     \n"+
+                "\n  insertSuccess cnt:\t"+totalInsertSuccessCnt+"     \n"+
                 "\n ---------------------------------------------\n"
         );
 
@@ -170,12 +170,12 @@ public class HugeGraphSparkLoader implements Serializable {
     }
 
 
-    private void collectLoadMetrics(LoadDistributeMetrics loadMetrics,Long totalInsertSuccess){
+    private void collectLoadMetrics(LoadDistributeMetrics loadMetrics,LongAccumulator totalInsertSuccess){
 
         Long edgeInsertSuccess = loadMetrics.readEdgeInsertSuccess();
         Long vertexInsertSuccess = loadMetrics.readVertexInsertSuccess();
-        totalInsertSuccess+=edgeInsertSuccess;
-        totalInsertSuccess+=vertexInsertSuccess;
+        totalInsertSuccess.add(edgeInsertSuccess);
+        totalInsertSuccess.add(vertexInsertSuccess);
 
     }
     private LoadContext initPartition(
